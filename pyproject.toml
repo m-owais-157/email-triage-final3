@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "email-triage-final2"
+name = "email-triage-final3"
 version = "0.1.0"
 dependencies = [
     "fastapi",
