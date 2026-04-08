@@ -1,0 +1,5 @@
+name: email-triage-final2
+
+entrypoint:
+  module: server.app
+  app: app
