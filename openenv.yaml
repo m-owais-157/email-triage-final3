@@ -1,5 +1,6 @@
-name: email-triage-final2
+name: email-triage-final3
 
 entrypoint:
   module: server.app
-  app: app
+    app: app
+    
