@@ -1,13 +1,19 @@
 import os
 import time
-import requests
+import json
+import urllib.request
 
-# env config
 API_BASE_URL = os.getenv("API_BASE_URL", "")
 MODEL_NAME = os.getenv("MODEL_NAME", "")
 HF_TOKEN = os.getenv("HF_TOKEN", "")
 ENV_URL = os.getenv("ENV_URL", "https://m-owais-7-email-triage-env-v1.hf.space")
 
+def post_json(url, data=None):
+    req = urllib.request.Request(url, method="POST")
+    req.add_header("Content-Type", "application/json")
+    body = json.dumps(data).encode("utf-8") if data is not None else b""
+    with urllib.request.urlopen(req, data=body, timeout=30) as f:
+        return json.load(f)
 
 def classify_email(text):
     lower = text.lower()
@@ -18,7 +24,6 @@ def classify_email(text):
     if any(k in lower for k in imp_kw):
         return "important"
     return "normal"
-
 
 def try_llm(text):
     if not API_BASE_URL or not MODEL_NAME:
@@ -39,11 +44,15 @@ def try_llm(text):
         pass
     return classify_email(text)
 
-
 def main():
     t0 = time.time()
-    reset_data = requests.post(f"{ENV_URL}/reset", timeout=30).json()
-    state = reset_data["state"]
+    try:
+        reset_data = post_json(f"{ENV_URL}/reset")
+    except Exception as e:
+        print(f"[ERROR] Failed to reset: {e}")
+        return
+
+    state = reset_data.get("state", {})
     emails = state.get("emails", [])
     n = len(emails)
     print(f"[START] tasks={n} env_url={ENV_URL}")
@@ -55,13 +64,17 @@ def main():
         eid = email["id"]
         label = try_llm(email["text"])
         action = {"email_id": eid, "label": label}
-        resp = requests.post(f"{ENV_URL}/step", json=action, timeout=30).json()
-        r = resp.get("reward", 0)
-        done = resp.get("done", False)
-        info = resp.get("info", {})
-        total += r
-        print(f"[STEP] step={step} email_id={eid} predicted={label} correct={info.get('correct_label','?')} reward={r} total_reward={total} done={done}")
-        if done:
+        try:
+            resp = post_json(f"{ENV_URL}/step", data=action)
+            r = resp.get("reward", 0)
+            done = resp.get("done", False)
+            info = resp.get("info", {})
+            total += r
+            print(f"[STEP] step={step} email_id={eid} predicted={label} correct={info.get('correct_label','?')} reward={r} total_reward={total} done={done}")
+            if done:
+                break
+        except Exception as e:
+            print(f"[ERROR] Step failed: {e}")
             break
 
     elapsed = round(time.time() - t0, 2)
@@ -69,6 +82,5 @@ def main():
     score = max(0.0, min(1.0, total / max_r)) if max_r > 0 else 0.0
     print(f"[END] total_reward={total} normalized_score={round(score, 4)} steps={step} elapsed={elapsed}s")
 
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
